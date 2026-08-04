@@ -1,0 +1,18 @@
+{
+  "name": "ios-macos-27-specialist",
+  "description": "iOS and macOS 27 development skills for Codex and Claude Code.",
+  "version": "0.1.0",
+  "author": {
+    "name": "super-original",
+    "url": "https://github.com/super-original"
+  },
+  "homepage": "https://github.com/super-original/ios-macos-27-specialist",
+  "repository": "https://github.com/super-original/ios-macos-27-specialist",
+  "keywords": [
+    "ios",
+    "macos",
+    "swiftui",
+    "uikit",
+    "xcode"
+  ]
+}

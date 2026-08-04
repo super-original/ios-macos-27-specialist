@@ -1,0 +1,11 @@
+Official iOS 27 icon artwork
+
+Source: https://developer.apple.com/assets/elements/icons/ios-27-num/ios-27-num-256x256_2x.png
+Publisher: Apple Inc.
+Downloaded: 2026-08-02
+Native dimensions: 512 x 512 pixels
+SHA-256: 7ad3745fa4b3d25cb06552379023e1e5615c84c0d34acac7bb2765939e1e8770
+
+The source artwork contains a 24-pixel transparent border. icon.png crops that
+border and scales the artwork back to its output size so the visible icon
+reaches all four canvas edges.

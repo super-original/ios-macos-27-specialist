@@ -1,0 +1,15 @@
+{
+  "name": "super-original",
+  "owner": {
+    "name": "super-original",
+    "url": "https://github.com/super-original"
+  },
+  "description": "iOS and macOS development plugins from super-original.",
+  "plugins": [
+    {
+      "name": "ios-macos-27-specialist",
+      "source": "./plugins/ios-macos-27-specialist",
+      "description": "Xcode, SwiftUI, UIKit, testing, security, and device workflows."
+    }
+  ]
+}

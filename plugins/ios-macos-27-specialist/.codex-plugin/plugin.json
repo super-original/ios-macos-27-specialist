@@ -1,0 +1,40 @@
+{
+  "name": "ios-macos-27-specialist",
+  "version": "0.1.0",
+  "description": "iOS and macOS 27 development skills for Codex and Claude Code.",
+  "author": {
+    "name": "super-original",
+    "url": "https://github.com/super-original"
+  },
+  "homepage": "https://github.com/super-original/ios-macos-27-specialist",
+  "repository": "https://github.com/super-original/ios-macos-27-specialist",
+  "keywords": [
+    "ios",
+    "macos",
+    "swiftui",
+    "uikit",
+    "xcode"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "iOS+macOS 27 Specialist",
+    "shortDescription": "Xcode, SwiftUI, UIKit, testing, security, and device workflows.",
+    "longDescription": "Cross-platform Codex and Claude Code plugin for Xcode security audits, C bounds safety, SwiftUI, UIKit modernization, device interaction, and test modernization.",
+    "developerName": "super-original",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Skills",
+      "Code Review",
+      "Code Generation"
+    ],
+    "defaultPrompt": [
+      "Audit this Xcode project for security settings.",
+      "Modernize this UIKit app for current iOS.",
+      "Review this SwiftUI code for iOS 27."
+    ],
+    "brandColor": "#1D4ED8",
+    "websiteURL": "https://github.com/super-original/ios-macos-27-specialist",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "super-original",
+  "interface": {
+    "displayName": "Super Original Plugins"
+  },
+  "plugins": [
+    {
+      "name": "ios-macos-27-specialist",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ios-macos-27-specialist"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

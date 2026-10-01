@@ -171,10 +171,10 @@ If any file is later skipped via §3 [Skipping a file's enablement](#skipping-a-
 
 Every commit during adoption is preceded by a stop-and-review step. During that stop the user is explicitly invited to inspect and modify the changes. **Their edits must end up in a commit — they must not be silently left in the working tree or dropped.** Follow this procedure at every commit point in this guide:
 
-1. Before staging anything, list **all** working-tree changes and inspect their diff using the captured VCS commands (e.g. `git status` + `git diff HEAD`) to enumerate them. This includes both the assistant's edits and any further edits the user made while the stop was open. Do not assume the working tree contains only what the assistant wrote.
+1. Before staging anything, list **all** working-tree changes and inspect their diff using the captured VCS commands (e.g. `git status` + `git diff HEAD`) to enumerate them. This includes both Claude's edits and any further edits the user made while the stop was open. Do not assume the working tree contains only what Claude wrote.
 2. Classify each modified or new file as **source-code** (`.c`, `.h`, validation files) or **build-system** (Xcode `project.pbxproj`, CMakeLists, Makefiles, any per-file flag entry).
 3. Check the result against the commit's declared scope (stated at each commit site below — e.g. "source-code only", "build-system only", or "headers + validation file"):
-    - If every changed file fits the scope, stage exactly those files (the assistant's and the user's) by explicit path and commit using the captured VCS commands.
+    - If every changed file fits the scope, stage exactly those files (Claude's + user's) by explicit path and commit using the captured VCS commands.
     - If the user's edits span kinds that don't all fit the scope — for example, source-code edits appearing during a build-system-only commit — **stop and ask the user** how to split them: which go into the current commit, which should be deferred to the next one, and which (if any) should be dropped. Apply their answer, then commit.
 4. Always specify explicit paths when staging or committing — never let unrelated working-tree changes (e.g. `.DS_Store`, scratch files) get picked up. On git, this rules out `git add -A`, `git add .`, `git commit -a`, and any flag or shorthand that auto-includes modified files.
 5. Do not propose folding user edits into a previously-made commit (e.g. `git commit --amend`) unless the user explicitly asks for it.

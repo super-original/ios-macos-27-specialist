@@ -42,7 +42,7 @@ All reference material lives under `references/` next to this file.
 - `references/reading-build-settings.md` — `GetTargetBuildSettings` schema, the filter script recipe, the audit-table construction, and the "already hardened" / "deliberately disabled" predicates.
 - `references/enhanced-security.md` — the Enhanced Security capability: build settings, entitlements, supported product types.
 - `references/pointer-authentication.md` — arm64e pointer signing: supported platforms, consumer-side compatibility notes.
-- `references/universal-binaries-for-libraries.md` — universal-binary recipe for library/framework targets (`ONLY_ACTIVE_ARCH = NO`; pointer authentication adds the `arm64e` slice automatically), qualifying product types, XCFramework guidance.
+- `references/universal-binaries-for-libraries.md` — universal-binary guidance for library/framework targets (pointer authentication adds the `arm64e` slice automatically), qualifying product types, XCFramework guidance.
 - `references/security-compiler-warnings.md` — the security-focused compiler warnings and settings enabled by Enhanced Security.
 - `references/cpp-hardening.md` — C++ stdlib hardening (`CLANG_CXX_STANDARD_LIBRARY_HARDENING`) and bounds-safe buffers (`ENABLE_CPLUSPLUS_BOUNDS_SAFE_BUFFERS`).
 - `references/typed-allocators.md` — type-aware allocator support and the `hardened-heap` sub-option.
@@ -50,6 +50,7 @@ All reference material lives under `references/` next to this file.
 - `references/readonly-platform-memory.md` — read-only protection of dyld state.
 - `references/runtime-restrictions.md` — dylib and Mach-message platform restrictions.
 - `references/hardware-memory-tagging.md` — MTE entitlements and supported hardware.
+- `references/checked-pointer-arithmetic.md` — Checked Pointer Arithmetic (CPA2).
 - `references/additional-settings.md` — opt-in diagnostic settings beyond the defaults (may have more false positives).
 - `references/adoption-strategy.md` — recommended ordering for validating Enhanced Security features (lowest-risk to highest-effort).
 - `references/decision-document.md` — how to maintain the persistent `xcode-security-settings.md` decision document.
@@ -73,10 +74,10 @@ The skill ships one helper script:
 
 Before doing any work, tell the user — in two or three sentences — what this skill is, what it will do, and roughly how much of their time and attention to expect:
 
-- **What it is.** An audit of the project's Xcode security build settings and entitlements (compiler warnings, Enhanced Security entitlements, pointer authentication, universal binaries for libraries, etc.).
-- **What happens.** I analyze the project, write an editable plan file at the project root for you to review, and apply only the changes you approve. Nothing is modified until you pick Run.
-- **Time commitment.** A few minutes of my time to analyze (longer on projects with many targets — I'll narrate progress). Then your review time on the plan file, which can be quick or thorough — your call. After Run, applying is fast; two things can pause for your input — the inquiry step (if there are deliberately-disabled settings whose rationale isn't documented), and a final yes/no on whether to keep the plan file in your project as a record.
-This all usually takes about 15-30 minutes, depending on the number of build targets and how long it takes for you to review and approve the plan.
+- **What it is.** An audit of the project's Xcode security build settings and entitlements (compiler warnings, Enhanced Security entitlements, pointer authentication, checked pointer arithmetic, universal binaries for libraries, etc.).
+- **What happens.** The skill runs in two parts of roughly equal length. First, **planning**: I analyze the project and write an editable plan file at the project root for you to review. Then, **execution**: once you pick Run, I apply only the changes you approved. Nothing is modified until you pick Run.
+- **Time commitment.** *Planning* is a few minutes of my analysis (longer on projects with many targets — I'll narrate progress) plus your review of the plan file, which can be quick or thorough — your call. *Execution* takes about as long: applying the approved changes, with two things that can pause for your input — the inquiry step (if there are deliberately-disabled settings whose rationale isn't documented), and a final yes/no on whether to keep the plan file in your project as a record.
+This all usually takes about 15-30 minutes, split roughly evenly between the two parts, depending on the number of build targets and how long it takes for you to review and approve the plan.
 
 Keep it tight — the user already invoked the skill knowing they wanted an audit.
 The briefing exists so they have realistic expectations.
@@ -93,7 +94,7 @@ After delivering the briefing, pause via `AskUserQuestion`. If the project has s
 - **Begin audit** — proceed to Phase 2.
 - **Cancel** — exit with "Cancelled — no changes applied."
 
-If the project has **no source control**, tell the user first: *"It is strongly recommend setting up source control before continuing. This skill modifies build settings and entitlements; without something like Git, rollback requires manual undo and you won't have a clean way to review the differences. Xcode has built-in support for [Source control management](doc://com.apple.documentation/documentation/xcode/source-control-management)"* Then ask:
+If the project has **no source control**, tell the user first: *"It is strongly recommended setting up source control before continuing. This skill modifies build settings and entitlements; without something like Git, rollback requires manual undo and you won't have a clean way to review the differences. Xcode has built-in support for [Source control management](doc://com.apple.documentation/documentation/xcode/source-control-management)"* Then ask:
 
 - **Set up source control first (Recommended)** — exit with "[Set up source control](doc://com.apple.documentation/documentation/xcode/configuring-your-xcode-project-to-use-source-control) and re-run the skill."
 - **Proceed without source control** — proceed to Phase 2; Phase 4 Step 3 will surface the no-source-control reminder again in the plan file.
@@ -119,7 +120,11 @@ Every per-target / per-setting action that needs to happen must have its own tas
     - **Enable Enhanced Security**: `Enable Enhanced Security at project level` (one task). On pbxproj-only projects, this task encapsulates the guide-and-verify flow described in Phase 5 Step 1a.
     - **Update entitlements**: one `Apply Enhanced Security entitlements to <target>` per target needing changes.
     - **Hardware memory tagging**: `Apply Hardware Memory Tagging` (one task; walks supported targets internally).
-  - `Apply Basic Clang Safety Warnings` if checked.
+    - **Checked pointer arithmetic**: `Apply Checked Pointer Arithmetic` (one task; walks supported targets internally).
+  - For each **Warnings** sub-item that's checked:
+    - `Apply Compiler Warnings` if that sub-item is checked.
+    - `Apply Static Analyzer Warnings` if that sub-item is checked.
+    - `Apply Clang-Tidy Warnings` if that sub-item is checked.
   - `Apply Additional Diagnostic Settings` if checked.
   - `Emit Bounds Safety Adoption guidance` if checked.
   - One `Inquire about <MACRO> on <target>` per Phase-6 candidate (only if "Inquire about disabled settings" is checked).
@@ -133,6 +138,8 @@ When entering each phase or sub-step:
 When finishing each phase or sub-step:
 - Print one line: "✓ <same label>" with a brief outcome if applicable (e.g., "✓ Detecting languages: C and Swift found.").
 - Update the task to `completed`.
+
+Apply steps may record what they did in their own task's `description` before completing it, one line per target. Phase 7 reads those lines instead of re-deriving state or scraping earlier output.
 
 ### Phase 3: Analyze Project and Settings
 
@@ -172,7 +179,7 @@ This step scales with target count: each `GetTargetBuildSettings` call takes sev
 Route each target into one of three categories by the `PRODUCT_TYPE_IDENTIFIER` recorded in Step 3:
 
 - **Entitlements-supported** — product type is in the "Supported Product Types" list of `references/enhanced-security.md` (applications, XPC services, system extensions, driver extensions [build settings only], tools). Read the entitlements plist at the path stored in this target's `CODE_SIGN_ENTITLEMENTS` build setting and classify the target as **Up-to-date**, **Partial**, **Off**, or **No-entitlements-file**. Multiple targets can share the same `CODE_SIGN_ENTITLEMENTS` path; classify each target independently.
-- **Library/framework** — product type is in the qualifying set listed in `references/universal-binaries-for-libraries.md` (frameworks, static frameworks, static libraries, dynamic libraries). No entitlements read. Phase 5 will configure the universal-binary recipe (`ONLY_ACTIVE_ARCH = NO`) for these.
+- **Library/framework** — product type is in the qualifying set listed in `references/universal-binaries-for-libraries.md` (frameworks, static frameworks, static libraries, dynamic libraries). No entitlements read. Phase 5 will check the universal-binary configuration for these.
 - **Skipped** — anything else (test bundles, app extensions, etc.).
 
 Now write everything Phase 3 has learned about this target into the `Audit <target>` task's `description` via `TaskUpdate`, then set it `completed`. The description holds the entire per-target state Phases 4–6 need to consult later. Format:
@@ -182,7 +189,8 @@ Category: <category> [/ <sub-state>]      # e.g. "Entitlements-supported / Parti
 Entitlements path: <evaluated CODE_SIGN_ENTITLEMENTS>     # omit for Library/framework and Skipped
 SDKROOT: <value>
 SUPPORTED_PLATFORMS: <value>
-Missing entitlements: <comma-separated short names>      # Entitlements-supported only; omit if empty
+Missing entitlements: <comma-separated short names>      # Entitlements-supported only; required and default-ON keys the target lacks; omit if empty
+Checked pointer arithmetic: <eligible-entitlement | eligible-slice-only | enabled | not-eligible: <reason>>   # Entitlements-supported and Library/framework targets
 Deliberately-disabled: <MACRO>=<value> (<source>[+<source>...]), ...   # one per disabled row; sources ⊆ {target-level, xcconfig, pbxproj} joined with '+' when more than one applies; omit the line entirely if none
 
 Audit table:
@@ -190,7 +198,16 @@ Audit table:
   ...
 ```
 
-The Category line is first so any client that surfaces a snippet shows something meaningful. The Audit-table block is the per-(target, tracked macro) rows from Step 3 in `key=value` form — one line per tracked macro, using the canonical column names defined in `references/reading-build-settings.md`. `matchLocations` carries the file:line citations in the same `<source>:<file>:<line>[,<line>...]` format used throughout. **Library/framework** and **Skipped** targets get this Category line, the platform fields, and the Audit-table block, then complete immediately (no entitlements read).
+The Category line is first so any client that surfaces a snippet shows something meaningful. The Audit-table block is the per-(target, tracked macro) rows from Step 3 in `key=value` form — one line per tracked macro, using the canonical column names defined in `references/reading-build-settings.md`. `matchLocations` carries the file:line citations in the same `<source>:<file>:<line>[,<line>...]` format used throughout. **Skipped** targets get this Category line, the platform fields, and the Audit-table block. **Library/framework** targets get those three plus the `Checked pointer arithmetic:` line. Both complete immediately (no entitlements read).
+
+**`Checked pointer arithmetic` is the single source of truth for this feature.** Compute it once, here, and record one of four values. Every later phase reads this line and applies no test of its own.
+
+- `enabled` — nothing to do for this target. For an Entitlements-supported target: the entitlements file carries `com.apple.security.hardened-process.checked-allocations.enforce-checked-pointer-arithmetic-overflow` and the evaluated `ENABLE_HARDWARE_CHECKED_POINTER_ARITHMETIC_SLICE` is `YES`. For a Library/framework target: the evaluated `ENABLE_HARDWARE_CHECKED_POINTER_ARITHMETIC_SLICE` is `YES` — there is no entitlement to check.
+- `not-eligible: <reason>` — one of: `platform`, when `SUPPORTED_PLATFORMS` / `SDKROOT` matches neither `iphoneos` nor `watchos`; `opted out`, when `ENABLE_HARDWARE_CHECKED_POINTER_ARITHMETIC_SLICE` is `deliberately disabled` for the target; `no arm64e`, when `ENABLE_POINTER_AUTHENTICATION` is `deliberately disabled`; or `outside the capability`, when `ENABLE_ENHANCED_SECURITY` is `deliberately disabled`. A macro that is merely `at default OFF` is not a reason — enabling Enhanced Security lifts it. `outside the capability` applies to Entitlements-supported targets only: the capability supplies the entitlement, and a library takes none.
+- `eligible-entitlement` — an Entitlements-supported target that can take checked pointer arithmetic and is not yet fully configured for it: it is missing the `arm64e.x1` slice, the checked-pointer-arithmetic entitlement, or both. Step 4 applies whichever is missing.
+- `eligible-slice-only` — a Library/framework target that can take checked pointer arithmetic and does not have the build setting. There is no entitlement half for these targets: entitlements are granted per process from the main executable, so the library builds the slice and the consuming app's entitlement is what enforces the checks. Step 4 applies the build setting only.
+
+The key is never listed under `Missing entitlements`, which stays required and default-ON keys only, so it cannot make a target **Partial** and cannot reach Step 1b.
 
 On large projects this iterates over many `.entitlements` plists — if Step 3 took noticeable time, this one will too.
 
@@ -207,7 +224,8 @@ Source control was checked in Phase 1, and the user already accepted any no-sour
 `TaskList` the `Audit <target>` tasks and `TaskGet` each. Early-exit if **all** default-checked plan items are already at their target state:
 
 - Every Enhanced-Security category (from each task's `Category:` line) is **Up-to-date** or **Skipped**.
-- Every relevant Basic-Clang-safety setting is `already hardened` on every applicable target (per each task's Audit-table block).
+- No task's `Checked pointer arithmetic:` line reads `eligible-entitlement` or `eligible-slice-only`.
+- Every relevant Warnings setting (compiler, static analyzer, and clang-tidy) is `already hardened` on every applicable target (per each task's Audit-table block).
 - No task's `Deliberately-disabled:` line yields a row (after the Phase-6 exclusions below).
 
 Optional follow-ups (Additional diagnostic settings, Bounds safety adoption) do **not** block early-exit. Report "Everything in scope is already configured" and exit; do not write a plan file.
@@ -224,16 +242,20 @@ Include only items that apply to the project (see omission rules below). Use thi
 **Generated:** <YYYY-MM-DD>
 > ⚠️ **No source control detected.** This skill modifies build settings and entitlements.
 > Without source control (e.g., Git), rollback requires manual undo. Consider [setting up source control](doc://com.apple.documentation/documentation/xcode/configuring-your-xcode-project-to-use-source-control) before picking **Run**.
-Edit the items below — set what steps to perform now, or leave them unchecked to defer them.
+Edit the items below — set what steps to perform now, or leave them unchecked to defer them. Questions about any item, or want a more detailed plan? Just ask — I'll answer, and can expand this plan on the points you care about before you decide.
 ## Phases
-- [x] **[Enhanced Security](doc://com.apple.documentation/documentation/Xcode/enabling-enhanced-security-for-your-app)** — the project's runtime-protection bundle. Apply to: <target list>.
-  - [x] **Enable Enhanced Security** — sets `ENABLE_ENHANCED_SECURITY=YES` at the project level. (Your project doesn't use a project-level xcconfig — I'll walk you through enabling it in Xcode's Build Settings UI yourself, then verify by reading project file.)
+- **Enhanced Security** — the project's runtime-protection bundle. Apply to: <target list>. (Group — check the sub-items below.)
+  - [x] **[Enable Enhanced Security](doc://com.apple.documentation/documentation/Xcode/enabling-enhanced-security-for-your-app)** — sets `ENABLE_ENHANCED_SECURITY=YES` at the project level. (Your project doesn't use a project-level xcconfig — I'll walk you through enabling it in Xcode's Build Settings UI yourself, then verify by reading project file.)
   - [x] **[Update entitlements](doc://com.apple.documentation/documentation/BundleResources/Entitlements/com.apple.security.hardened-process)** — adds the hardened-process entitlement family per target (Memory Safety, Runtime Protections).
-  - [x] **[Hardware memory tagging](doc://com.apple.documentation/documentation/BundleResources/Entitlements/com.apple.security.hardened-process.checked-allocations)** — adds the soft-mode MTE entitlement on supported platforms (<target list filtered to MTE-supported platforms>).
-- [x] **Basic Clang safety warnings** — <N> settings, applied to all C/C++/ObjC targets.
+  - [x] **[Hardware memory tagging](doc://com.apple.documentation/documentation/BundleResources/Entitlements/com.apple.security.hardened-process.checked-allocations)** — adds the hardware memory tagging entitlement, in soft mode, on supported platforms (<target list filtered to MTE-supported platforms>).
+  - [x] **[Checked pointer arithmetic](doc://com.apple.documentation/documentation/BundleResources/Entitlements/com.apple.security.hardened-process.checked-allocations.enforce-checked-pointer-arithmetic-overflow)** — adds the arm64e.x1 slice and the entitlement to enforce pointer-arithmetic overflow checking (<target list filtered to arm64e.x1-supported platforms>). Run time enforcement requires hardware memory tagging enabled. Latent pointer-arithmetic bugs will terminate the app on capable hardware.
+- **[Warnings](doc://com.apple.documentation/documentation/Xcode/build-settings-reference)** — additional diagnostics on all C/C++/ObjC targets. (Group — check the sub-items below.)
+  - [x] **Compiler warnings** — <N> settings promoting security-relevant compiler diagnostics (fire on every build).
+  - [x] **Static analyzer warnings** — <N> security checkers (run during Build and analyze).
+  - [x] **Clang-tidy warnings** — <N> clang-tidy-integrated checks (run during Build and analyze).
 - [x] **Inquire about disabled settings** — <M> found (e.g., `<setting>=NO` on `<target>`). May trigger follow-up questions if no rationale is documented.
-- [ ] **Additional diagnostic settings** — extra warnings/checkers. Produces more findings to review. See `references/additional-settings.md`.
-- [ ] **Bounds safety adoption** — pointer to a separate skill. No changes applied here.
+- [ ] **Additional diagnostic settings** — extra opt-in warnings/checkers beyond the defaults. Off by default: they surface more findings to review and can be noisier (more false positives).
+- [ ] **[Bounds safety adoption](https://clang.llvm.org/docs/BoundsSafetyAdoptionGuide.html)** — pointer to a separate skill. No changes applied here.
 ## Decision document
 The skill creates or updates `xcode-security-settings.md` to record every setting decision (kept, deferred, disabled, with rationale). Edit the path to relocate.
 - Path: `xcode-security-settings.md`
@@ -249,19 +271,21 @@ The decision document should live in the same directory as the rest of the docum
 
 A plan item is omitted entirely when it doesn't apply:
 
-- **Enhanced Security** — omit (along with all three sub-items) if every supported-product-type category from Phase 3 step 4 is **Up-to-date** or **Skipped**.
+- **Enhanced Security** — omit (along with all sub-items) only if every supported-product-type category from Phase 3 step 4 is **Up-to-date** or **Skipped**, and no task's `Checked pointer arithmetic:` line reads `eligible-entitlement` or `eligible-slice-only`. **Enhanced Security** must be enabled otherwise.
 - **Enable Enhanced Security** (sub-item) — never omitted when Enhanced Security is shown; the trailing pbxproj-only parenthetical is the only conditional part.
 - **Update entitlements** (sub-item) — never omitted when Enhanced Security is shown.
-- **Hardware memory tagging** (sub-item) — omit if no target's `SUPPORTED_PLATFORMS` / `SDKROOT` matches `macosx`, `iphoneos`, `iphonesimulator`, `xros`, or `xrsimulator`.
-- **Basic Clang safety warnings** — omit if pure-Swift, or if every relevant setting is `already hardened` on every applicable target.
-- **Inquire about disabled settings** — omit if the `deliberately disabled` predicate yields no rows (after excluding any `ENABLE_POINTER_AUTHENTICATION[sdk=*simulator*] = NO` row — a simulator-only opt-out is expected and harmless, since the simulator has no `arm64e`).
+- **Hardware memory tagging** (sub-item) — omit if no target's `SUPPORTED_PLATFORMS` / `SDKROOT` matches `macosx`, `iphoneos`, `iphonesimulator`, `watchos`, `xros`, or `xrsimulator`.
+- **Checked pointer arithmetic** (sub-item) — omit if no task's `Checked pointer arithmetic:` line reads `eligible-entitlement` or `eligible-slice-only`.
+- **Warnings** — omit the parent (and all three sub-items) if pure-Swift, or if every setting across all three groups is `already hardened` on every applicable target. Otherwise omit an individual sub-item — **Compiler warnings**, **Static analyzer warnings**, or **Clang-tidy warnings** — when every setting in that group is `already hardened` on every applicable target, or the group has no applicable settings for the detected languages.
+- **Inquire about disabled settings** — omit if the `deliberately disabled` predicate yields no rows.
 - **Additional diagnostic settings** — never omitted; always offered.
 - **Bounds safety adoption** — omit if Phase 3 step 2 detected no C, C++, or Objective-C++ (counting `sourcecode.cpp.*` overrides as C++).
 
 ##### Default check state
 
-Items under **Phases** are default-checked (`[x]`); items (`[ ]`) are default-unchecked.
-The user can flip either by editing the plan file before picking **Run**.
+**Group headings carry no checkbox.** The parent lines that have sub-items — **Enhanced Security** and **Warnings** — are plain bold group labels, not checkable items; their sub-items carry the checkboxes. This avoids the ambiguity of a checked parent whose sub-items are all unchecked. Every other item (including leaf items with no sub-items, like **Inquire about disabled settings**, **Additional diagnostic settings**, **Bounds safety adoption**) is checkable.
+
+The user can flip items and sub-items under **Phases** by editing the plan file before picking **Run**.
 
 #### Step 4: Ask for approval
 
@@ -275,18 +299,22 @@ Then ask via `AskUserQuestion` with single-select options:
 
 #### Step 5: Handle the response
 
+If the user asks a question or requests more detail instead of picking Run/Cancel: answer it, consulting the relevant doc from **Bundled Reference Documents** (e.g. `references/additional-settings.md` for the additional diagnostic settings). If they want that detail captured, update `xcode-security-audit-plan.md` via `XcodeUpdate` to elaborate on those points. Then re-present the Step 4 approval prompt — nothing is applied until the user picks Run.
+
 If **Cancel**: run the final cleanup task (`Prompt to remove plan file`, see "Phase 7: Report and Decision Document" below). The keep-or-remove prompt is offered on Cancel too, so the user's choice to abandon the audit doesn't silently differ from a normal completion. Report "Cancelled — no changes applied," and exit the skill.
 
 If the plan file is missing at re-read time (the user deleted it from disk before responding), treat it as a Cancel — and skip the `Prompt to remove plan file` task (there's nothing to remove).
 
 If **Run**: `XcodeRead xcode-security-audit-plan.md`. Parse:
 - Each `- [x]` or `- [X]` bullet is a checked item; the item name is the bold portion (between `**…**`).
+- A bold bullet with **no** checkbox (e.g. `- **Enhanced Security** …`, `- **Warnings** …`) is a group heading, not a checkable item. It creates no task of its own — its checked sub-items drive the work. Do not treat it as checked or unchecked.
 - Items written as `- [ ]` and items deleted from the file are skipped — both produce identical skip behavior.
 - Under the "Decision document" heading, the value after `Path:` is the decision document location.
 
 Create the fine-grained tasks listed in **Track Progress**:
 
 - For each `Apply Enhanced Security entitlements to <target>` task, copy the per-target delta from the corresponding `Audit <target>` task's description (`Category:`, `Entitlements path:`, `Missing entitlements:`) into the apply task's own description so Phase 5 reads from one place.
+- The **Warnings** parent line is a heading, not a task — it produces no task of its own. Each checked **Warnings** sub-item creates its corresponding apply task: **Compiler warnings** → `Apply Compiler Warnings`, **Static analyzer warnings** → `Apply Static Analyzer Warnings`, **Clang-tidy warnings** → `Apply Clang-Tidy Warnings`. This mirrors how the **Enhanced Security** parent maps to its sub-item tasks.
 - To create the `Inquire about <MACRO> on <target>` tasks (only when **Inquire about disabled settings** is checked), `TaskList` the `Audit <target>` tasks and `TaskGet` each; the `Deliberately-disabled:` line of each description lists that target's candidate rows. Apply the Phase-6 exclusions documented below when filtering.
 - When creating the `Report and update decision document` task, put the parsed decision-document path in its description so Phase 7 reads it from there.
 
@@ -322,64 +350,102 @@ Read `references/enhanced-security.md` for the full key list, defaults, and the 
 - `references/security-compiler-warnings.md` — security-focused compiler warnings
 - `references/cpp-hardening.md` — C++ stdlib hardening and bounds checking
 - `references/hardware-memory-tagging.md` — ARM MTE
+- `references/checked-pointer-arithmetic.md` — checked pointer arithmetic (CPA2)
 
 **Pointer authentication and binary dependencies.** Enhanced Security is a bundle of independent protections; only pointer authentication cascades to `arm64e`. Always recommend `ENABLE_ENHANCED_SECURITY = YES` at the project level. If the project has a binary Swift Package, xcframework, or prebuilt framework that does not ship `arm64e`, the right mitigation is to override `ENABLE_POINTER_AUTHENTICATION = NO` at the target level on every target that links the dependency — not to skip Enhanced Security. List the offending dependencies in the report so the user can ask the vendor for `arm64e` support and lift the override later.
 
-**Producer side — universal binary on library/framework targets.** Pointer authentication is highly recommended on library and framework targets too — do not skip it on the grounds that the universal recipe produces a larger on-disk artifact (RAM footprint and execution cost are unchanged; dyld loads only one slice). Enabling pointer authentication already builds both the `arm64` and `arm64e` slices automatically, so no explicit `ARCHS` is needed. For each target in the **Library/framework** category from Phase 3 step 4, Phase 5 below applies a target-level `ONLY_ACTIVE_ARCH = NO` (Release) so the distributed build emits both slices and consumers can pick either. See `references/universal-binaries-for-libraries.md`.
+`arm64e.x1` is a pointer-authentication slice, so it should not be built where pointer authentication is off. A binary dependency that ships no `arm64e` slice will likely not ship `arm64e.x1` either. On every target that gets a target-level `ENABLE_POINTER_AUTHENTICATION = NO`, also set a target-level `ENABLE_HARDWARE_CHECKED_POINTER_ARITHMETIC_SLICE = NO`. Step 4 skips these targets, so the audit never adds the checked pointer arithmetic entitlement there. If a target already carries `com.apple.security.hardened-process.checked-allocations.enforce-checked-pointer-arithmetic-overflow` from an earlier configuration, report it — the build will warn that it has no effect without `arm64e.x1`.
+
+**Producer side — universal binary on library/framework targets.** Pointer authentication is highly recommended on library and framework targets too — do not skip it on the grounds that the universal binary is a larger on-disk artifact (RAM footprint and execution cost are unchanged; dyld loads only one slice). Enabling pointer authentication already builds both the `arm64` and `arm64e` slices automatically, so no explicit `ARCHS` is needed. The same argument extends to checked pointer arithmetic, which requires the `arm64e.x1` slice appended: a consumer building for `arm64e.x1` gets checked arithmetic over the library's code only if the library ships that slice — the consumer app must meet other requisites as well for run time enforcement. Step 4 applies the build setting to these targets. See `references/universal-binaries-for-libraries.md` and `references/checked-pointer-arithmetic.md`.
 
 For each task:
 
 1. **Compose the change set** from this apply task's description (the `Category:` / `Missing entitlements:` lines copied in from the audit task).
    - **Entitlements-supported** categories (Partial / Off / No-entitlements-file): add/update entitlements via `AddEntitlement`; create `.entitlements` if missing and wire `CODE_SIGN_ENTITLEMENTS`. DriverKit targets are supported for build settings only — skip entitlement changes for them.
-   - **Library/framework** category: no entitlements work. The change set is the universal-binary recipe — see item 2 below.
+   - **Library/framework** category: no entitlements work, and no build-setting change either — pointer authentication already emits both slices. The only thing to do is the distribution check in item 2 below.
 
 2. **Per-target build settings.** `ENABLE_ENHANCED_SECURITY = YES` is already set at the project level (Step 1a above), so it cascades `ENABLE_POINTER_AUTHENTICATION = YES` to every target. Simulator builds need no override — the build system drops `arm64e` for simulator SDKs automatically. The only per-target override: for each target that links a binary dependency that doesn't ship `arm64e`, set an unconditional target-level `ENABLE_POINTER_AUTHENTICATION = NO` (that dependency can't be linked as `arm64e` on any platform). Skip targets that already have an explicit target-level value (per the Audit-table block in their `Audit <target>` task).
 
-   For each **Library/framework**-category target where pointer authentication will end up enabled (the target's platform supports arm64e and there is no existing target-level `ENABLE_POINTER_AUTHENTICATION = NO`), also pre-write a target-level `ONLY_ACTIVE_ARCH = NO` (Release configuration) so the distributed build emits both the `arm64` and `arm64e` slices. Use the target's xcconfig if it has one, otherwise `UpdateTargetBuildSetting`. Do not write an explicit `ARCHS` — pointer authentication appends the `arm64e` slice automatically, so a hard-coded `ARCHS` is redundant. Skip targets that already have an explicit `ONLY_ACTIVE_ARCH` value (per the Audit-table block in that target's `Audit <target>` task).
+   For each **Library/framework**-category target where pointer authentication will end up enabled (the target's platform supports arm64e and there is no existing target-level `ENABLE_POINTER_AUTHENTICATION = NO`), no build-setting change is needed — pointer authentication appends the `arm64e` slice automatically. Only check that the distributed build emits both the `arm64` and `arm64e` slices: if the target sets `ONLY_ACTIVE_ARCH = YES` in its Release/distribution configuration, warn in the report that consumers get a single-architecture artifact.
 
-   Do not auto-enable default-OFF sub-options (MTE family); those are handled by Step 3 below if checked.
+   Do not auto-enable default-OFF sub-options. Hardware memory tagging belongs to Step 3, checked pointer arithmetic to Step 4.
 
 3. **Apply** the change set per target: add or update entitlements with `AddEntitlement` (creating the `.entitlements` file and wiring `CODE_SIGN_ENTITLEMENTS` when the target has none); and apply build-setting changes.
 
-After all targets are processed, report: "Enabled Enhanced Security on N target(s). Added a target-level `ENABLE_POINTER_AUTHENTICATION = NO` on T target(s) that link arm64e-less binary dependencies. Configured universal binary on U library/framework target(s)." If the project is pbxproj-only and `Verify Enhanced Security at project level` succeeded, append: "Enhanced Security is enabled at the project level (you set it in Xcode)." If the user skipped the guide step, append: "Project-level `ENABLE_ENHANCED_SECURITY` was not enabled this run — re-run the skill after enabling it in Xcode."
+After all targets are processed, report: "Enabled Enhanced Security on N target(s). Added a target-level `ENABLE_POINTER_AUTHENTICATION = NO` on T target(s) that link arm64e-less binary dependencies. Universal `arm64`/`arm64e` binary on U library/framework target(s)." If the project is pbxproj-only and `Verify Enhanced Security at project level` succeeded, append: "Enhanced Security is enabled at the project level (you set it in Xcode)." If the user skipped the guide step, append: "Project-level `ENABLE_ENHANCED_SECURITY` was not enabled this run — re-run the skill after enabling it in Xcode."
 
 The user already approved this in "Phase 4" — no further prompt is needed.
 
 The per-target `Apply Enhanced Security entitlements` tasks dominate Phase-5 wall time on multi-target projects. Each one edits the target's `.entitlements` plist.
 
-#### Step 2: Basic Clang Safety Warnings
+#### Step 2: Warnings
 
-If pure Swift, skip. For each setting, consult that target's `Audit <target>` task description (the Audit-table block) and skip individual settings whose row is `already hardened`. Otherwise apply target-level (see "How to apply build settings"):
+If pure Swift, skip the whole step. This step covers three groups, each gated on its own plan sub-item — **Compiler warnings**, **Static analyzer warnings**, and **Clang-tidy warnings**. Skip any group whose sub-item was unchecked or deleted. For every setting, consult that target's `Audit <target>` task description (the Audit-table block) and skip individual settings whose row is `already hardened`. Otherwise apply target-level (see "How to apply build settings").
+
+**Compiler warnings** (fire on every build):
 
 - `GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR` — non-void function returning without a value is undefined behavior; callers read whatever happened to be in the return register. Promoting to error catches this at compile time. `YES_ERROR` is the documented Xcode value for "treat this specific warning as an error" — it does not flip every warning into an error.
 - `GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE` — reading uninitialized stack values leaks prior frame contents and lets attackers control flow with stale data. Aggressive mode warns on more cases (e.g., conditional initialization paths).
 - `CLANG_WARN_IMPLICIT_FALLTHROUGH = YES` — implicit `switch` fallthrough is one of the most common sources of branching bugs; the warning forces an explicit `[[fallthrough]]` / `__attribute__((fallthrough))` whenever intentional.
 - `GCC_WARN_64_TO_32_BIT_CONVERSION = YES` — silent narrowing of `size_t`/pointers to `int` is a classic source of integer-truncation vulnerabilities (length checks pass on the wide value, then fail open on the narrow one).
 - `GCC_TREAT_IMPLICIT_FUNCTION_DECLARATIONS_AS_ERRORS = YES` (C/ObjC only) — implicit declarations were removed in C99 and produce wrong calling conventions and wrong return-type assumptions in modern C. Always an error.
+
+The two `YES_ERROR` / `… ERRORS = YES` settings are scoped: they only promote *their own specific warning* to an error, not all warnings in the project.
+
+**Static analyzer warnings** (run during *Build and analyze*, not regular builds):
+
 - `CLANG_ANALYZER_SECURITY_FLOATLOOPCOUNTER = YES` — floating-point loop counters can stall or overshoot due to rounding; the analyzer flags loops where this can become a security-relevant bug.
 - `CLANG_ANALYZER_SECURITY_INSECUREAPI_RAND = YES` — `rand()` / `random()` are predictable PRNGs unsuitable for any security purpose; analyzer flags their use so callers switch to `arc4random_uniform` or `SecRandomCopyBytes`.
 - `CLANG_ANALYZER_SECURITY_INSECUREAPI_STRCPY = YES` — flags `strcpy`, `strcat`, and friends that are inherently unsafe; callers should switch to size-bounded variants (`strlcpy`, `strlcat`, `snprintf`).
 
-The two `YES_ERROR` / `… ERRORS = YES` settings are scoped: they only promote *their own specific warning* to an error, not all warnings in the project.
+**Clang-tidy warnings** (clang-tidy-integrated checks that are part of the clang static analyzer; they fire only during *Build and analyze* / `clang --analyze`, never on normal builds, so there is no build-break risk and adopters need to install nothing extra):
 
-Report briefly: "Enabled additional compiler warnings."
+- `CLANG_TIDY_BUGPRONE_REDUNDANT_BRANCH_CONDITION = YES` — flags a branch condition that is redundant with an enclosing condition, a common sign of a copy-paste or logic error.
+
+Report briefly per group, e.g.: "Enabled compiler warnings, static analyzer warnings, and clang-tidy warnings." — naming only the groups actually applied.
 
 #### Step 3: Hardware Memory Tagging
 
 If the **Hardware memory tagging** sub-item (under Enhanced Security) was unchecked or deleted, skip this step.
 
-Hardware memory tagging is supported only for targets whose `SUPPORTED_PLATFORMS` (or `SDKROOT`) is `macosx`, `iphoneos` / `iphonesimulator`, or `xros` / `xrsimulator`.
-Hardware backing requires an iPhone or iPad with an A19 chip or later, or a Mac or Apple Vision Pro with an M5 chip or later.
+Hardware memory tagging is supported only for targets whose `SUPPORTED_PLATFORMS` (or `SDKROOT`) is `macosx`, `iphoneos` / `iphonesimulator`, `watchos`, or `xros` / `xrsimulator`.
+Hardware backing requires an iPhone or iPad with an A19 chip or later, a Mac or Apple Vision Pro with an M5 chip or later, or an Apple Watch with an S11 chip or later.
 
-Read `references/hardware-memory-tagging.md` and apply the soft-mode MTE entitlement to every supported target. The user already approved this in "Phase 4" — no further prompt is needed.
+Read `references/hardware-memory-tagging.md` and apply both keys to every supported target: `com.apple.security.hardened-process.checked-allocations`, and its `soft-mode` sub-option for a non-fatal rollout. Soft mode alone does nothing — it modifies the parent key rather than replacing it. The user already approved this in "Phase 4" — no further prompt is needed.
 
-#### Step 4: Additional Diagnostic Settings
+#### Step 4: Checked Pointer Arithmetic
+
+Run this step after Step 1 and Step 3, whichever of them run: it reads settings Step 1 can change and the entitlements Step 3 can add. Checked pointer arithmetic requires the `arm64e.x1` slice, and this step enables that slice only on a target already building the `arm64e` slice with pointer authentication. Run time enforcement additionally requires hardware memory tagging on the same target.
+
+Skip this step if the **Checked pointer arithmetic** sub-item was unchecked or deleted.
+
+Apply to every target whose `Checked pointer arithmetic:` line reads `eligible-entitlement` or `eligible-slice-only`; skip the rest. That line is computed in Phase 3 step 4 and is the only eligibility test — do not re-derive it here.
+
+Then check the conditions below per target, reading each value fresh: Step 1 may have changed the build settings, and Step 3 may have added the entitlement. Skip a target and report it when any condition it is subject to fails.
+
+- `ENABLE_ENHANCED_SECURITY` evaluates to `YES` — `eligible-entitlement` targets only, since the entitlement needs the capability.
+- `ENABLE_POINTER_AUTHENTICATION` evaluates to `YES` — both kinds of target, since `arm64e.x1` is a pointer-authentication slice.
+- `com.apple.security.hardened-process.checked-allocations` is in the entitlements file — `eligible-entitlement` targets only, since run time enforcement depends on hardware memory tagging. The key is absent when Step 3 did not run, skipped this target, or the **Hardware memory tagging** sub-item was unchecked.
+
+Run time enforcement requires a device running iOS with an A20 Pro chip or later, or a device running watchOS with an S11 chip or later.
+
+Read `references/checked-pointer-arithmetic.md` and apply per target. For an `eligible-entitlement` target, apply both halves: set `ENABLE_HARDWARE_CHECKED_POINTER_ARITHMETIC_SLICE = YES` at target level (the target's xcconfig, otherwise `UpdateTargetBuildSetting`), and add `com.apple.security.hardened-process.checked-allocations.enforce-checked-pointer-arithmetic-overflow` with `AddEntitlement`. Both halves are required because the slice alone does not enforce checked pointer arithmetic, and Xcode warns at build time if the entitlement is set while the target is not building `arm64e.x1`. For an `eligible-slice-only` target, apply the build setting only.
+
+Record the outcome for every target in the `Apply Checked Pointer Arithmetic` task's `description` via `TaskUpdate`, one line per target, so Phase 7 (Report and Decision Document) reads it from one place:
+
+```
+<target>: applied | skipped: <reason>
+```
+
+Use `skipped: not eligible — <reason from the target's Checked pointer arithmetic: line>` for a target that was never eligible, and `skipped: ENABLE_ENHANCED_SECURITY is <value>`, `skipped: ENABLE_POINTER_AUTHENTICATION is <value>`, or `skipped: no hardware memory tagging entitlement` for one that was eligible but failed the re-read above. The user already approved this in "Phase 4" — no further prompt is needed.
+
+#### Step 5: Additional Diagnostic Settings
 
 If the **Additional diagnostic settings** plan item was unchecked or deleted, skip this step.
 
 Read `references/additional-settings.md` and follow it. The user already approved this in "Phase 4" — no further prompt is needed.
 
-#### Step 5: Bounds Safety Adoption
+#### Step 6: Bounds Safety Adoption
 
 If the **Bounds safety adoption** plan item was unchecked or deleted, skip this step.
 
@@ -397,7 +463,7 @@ If the **Inquire about disabled settings** plan item was unchecked or deleted, s
 
 This phase pauses for one user response per deliberately-disabled setting that lacks a documented rationale. If the candidate list is long, surface the count up front so the user knows what to expect ("I found 7 deliberately-disabled settings; let me ask about each").
 
-A row is a candidate when the `deliberately disabled` predicate (defined in `references/reading-build-settings.md`) holds. `TaskList` the `Audit <target>` tasks and `TaskGet` each; the `Deliberately-disabled:` line of each description lists that target's candidate rows. Exclude any simulator-scoped `ENABLE_POINTER_AUTHENTICATION[sdk=*simulator*] = NO` row (expected and harmless — the simulator has no `arm64e`); flag an *unconditional* `ENABLE_POINTER_AUTHENTICATION = NO`, since that disables pointer authentication on device builds. Restrict to settings whose Scope (in `references/security-settings-reference.md`) covers a language detected in Phase 3 step 2.
+A row is a candidate when the `deliberately disabled` predicate (defined in `references/reading-build-settings.md`) holds. `TaskList` the `Audit <target>` tasks and `TaskGet` each; the `Deliberately-disabled:` line of each description lists that target's candidate rows. Flag an *unconditional* `ENABLE_POINTER_AUTHENTICATION = NO`, since that disables pointer authentication on device builds. Flag `ENABLE_HARDWARE_CHECKED_POINTER_ARITHMETIC_SLICE = NO` on a target whose `Checked pointer arithmetic:` line reads `not-eligible: opted out` — that reason means the opt-out is the only thing standing between the target and the `arm64e.x1` slice. Do not flag it for the other `not-eligible` reasons, where the slice could not be built anyway. Restrict to settings whose Scope (in `references/security-settings-reference.md`) covers a language detected in Phase 3 step 2; both settings above have no Scope and are flagged regardless.
 
 For each candidate, walk the corresponding `Inquire about <MACRO> on <target>` task created in Phase 4 step 5:
 
@@ -411,9 +477,10 @@ Same flow applies to `ENABLE_ENHANCED_SECURITY = NO` if it appears on any task's
 Produce a lean summary:
 
 1. **Enabled** — project-wide settings that were enabled.
-2. **Enhanced Security per target** — one line per target: name, final status (up-to-date / applied / skipped-by-user), terse delta (entitlements added, whether an entitlements file was created). Roll up Skipped targets into one line.
+2. **Enhanced Security per target** — one line per target: name, final status (up-to-date / applied / skipped-by-user), terse delta (entitlements added, whether an entitlements file was created, which slices the target now builds, whether checked pointer arithmetic was applied). Roll up Skipped targets into one line. For checked pointer arithmetic, `TaskGet` the `Apply Checked Pointer Arithmetic` task and use its per-target outcome lines, including the reason for each skip.
 3. **Already active** — settings already configured correctly.
 4. **Inquired** — settings found disabled and the outcome of the inquiry.
+5. **Test your app** — action item for the user: test on real hardware (not the simulator) that supports every enabled hardening, watch for protections firing, and fix the crashes and simulated crash reports that surface. Ship to customers only once the hardened app is adequately tested — otherwise it may crash or run slowly in production. For hardware memory tagging specifically, fix the simulated crash reports soft mode produces before disabling soft mode for enforcement. Checked pointer arithmetic has no soft mode and memory tagging's does not cover it, so test on capable hardware before shipping: a latent pointer-arithmetic bug terminates the app.
 
 **Decision document.** `TaskGet` the `Report and update decision document` task to read the decision-document path. Then read `references/decision-document.md` and follow it to create or update the document at that path.
 

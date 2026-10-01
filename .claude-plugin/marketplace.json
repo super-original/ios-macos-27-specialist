@@ -9,7 +9,7 @@
     {
       "name": "ios-macos-27-specialist",
       "source": "./plugins/ios-macos-27-specialist",
-      "description": "Xcode, SwiftUI, UIKit, testing, security, and device workflows."
+      "description": "Apple-platform development, accessibility, localization, and device workflows."
     }
   ]
 }

@@ -8,7 +8,11 @@ Complete reference for the security build settings and entitlements managed by t
 
 **Filtering recipe.** `scripts/filter_build_settings.py` filters `GetTargetBuildSettings` output to entries in this reference; it derives its filter regex from this file at runtime by extracting backtick-quoted macro names. Adding a new setting here automatically extends the filter. See `references/reading-build-settings.md` for usage.
 
-## Basic Clang Safety Warnings — Always Enable
+## Warnings — Always Enable
+
+### Compiler Warnings
+
+Fire on every build.
 
 | Build Setting | Value | CLI Flag | Scope | Why Safe |
 |---|---|---|---|---|
@@ -17,9 +21,24 @@ Complete reference for the security build settings and entitlements managed by t
 | `CLANG_WARN_IMPLICIT_FALLTHROUGH` | `YES` | `-Wimplicit-fallthrough` | C/C++/ObjC/ObjC++ | Catches logic bugs in switch |
 | `GCC_WARN_64_TO_32_BIT_CONVERSION` | `YES` | `-Wshorten-64-to-32` | C/C++/ObjC/ObjC++ | Truncation is a real issue |
 | `GCC_TREAT_IMPLICIT_FUNCTION_DECLARATIONS_AS_ERRORS` | `YES` | `-Werror=implicit-function-declaration` | C/ObjC | Implicit decls cause wrong return types |
+
+### Static Analyzer Warnings
+
+Run during *Build and analyze*, not regular builds.
+
+| Build Setting | Value | CLI Flag | Scope | Why Safe |
+|---|---|---|---|---|
 | `CLANG_ANALYZER_SECURITY_FLOATLOOPCOUNTER` | `YES` | checker: `security.FloatLoopCounter` | C/C++/ObjC/ObjC++ | Low false-positive rate |
 | `CLANG_ANALYZER_SECURITY_INSECUREAPI_RAND` | `YES` | checker: `security.insecureAPI.rand` | C/C++/ObjC/ObjC++ | Flags insecure random |
 | `CLANG_ANALYZER_SECURITY_INSECUREAPI_STRCPY` | `YES` | checker: `security.insecureAPI.strcpy` | C/C++/ObjC/ObjC++ | Flags unsafe string ops |
+
+### Clang-Tidy Warnings
+
+Clang-tidy-integrated checks that are part of the clang static analyzer; they fire only during *Build and analyze* (or `clang --analyze`), never on normal builds. There is no build-break risk from enabling them, and adopters do not need to install anything extra.
+
+| Build Setting | Value | CLI Flag | Scope | Why Safe |
+|---|---|---|---|---|
+| `CLANG_TIDY_BUGPRONE_REDUNDANT_BRANCH_CONDITION` | `YES` | static analyzer check (integrated from clang-tidy): `bugprone-redundant-branch-condition` | C/C++/ObjC/ObjC++ | Runs during Build and analyze, not regular builds |
 
 ## Enhanced Security — Capability
 
@@ -28,8 +47,8 @@ Complete reference for the security build settings and entitlements managed by t
 | Build Setting | Value | CLI Flag / Effect | Note |
 |---|---|---|---|
 | `ENABLE_ENHANCED_SECURITY` | `YES` | Enables the Enhanced Security capability (build-setting + entitlements) | See `enhanced-security.md` |
-| `ENABLE_POINTER_AUTHENTICATION` | `YES` | Adds an `arm64e` slice — builds both `arm64` and `arm64e` (no compiler flag; appends `arm64e` to `ARCHS_STANDARD`) | Set at project level. The simulator needs no override — the build system drops `arm64e` for simulator SDKs automatically (they define no `arm64e`). |
-| `ARCHS` | `arm64 arm64e` | Pins both slices explicitly | Optional belt-and-suspenders on distributed library/framework targets — pointer authentication already builds both slices automatically. Use it to keep the binary universal independent of the enhanced-security cascade. See `universal-binaries-for-libraries.md`. |
+| `ENABLE_POINTER_AUTHENTICATION` | `YES` | Appends `arm64e` to `ARCHS_STANDARD` — builds both `arm64` and `arm64e` slices | Set at project level. |
+| `ENABLE_HARDWARE_CHECKED_POINTER_ARITHMETIC_SLICE` | `YES` | Appends `arm64e.x1` to `ARCHS_STANDARD`, with checked pointer arithmetic instructions and other features. | Defaults to `NO` and is **not** cascaded by `ENABLE_ENHANCED_SECURITY` — set it explicitly, per target. |
 
 **Cascaded by `ENABLE_ENHANCED_SECURITY` (do not set manually):**
 
@@ -63,6 +82,7 @@ These are managed per-target in each target's `.entitlements` file. See `enhance
 - [`com.apple.security.hardened-process.checked-allocations.soft-mode`](doc://com.apple.documentation/documentation/BundleResources/Entitlements/com.apple.security.hardened-process.checked-allocations.soft-mode) — simulated crash reports without termination
 - [`com.apple.security.hardened-process.checked-allocations.enable-pure-data`](doc://com.apple.documentation/documentation/BundleResources/Entitlements/com.apple.security.hardened-process.checked-allocations.enable-pure-data) — tag non-pointer heap allocations
 - [`com.apple.security.hardened-process.checked-allocations.no-tagged-receive`](doc://com.apple.documentation/documentation/BundleResources/Entitlements/com.apple.security.hardened-process.checked-allocations.no-tagged-receive) — opt out of receiving tagged pointers via Mach IPC
+- [`com.apple.security.hardened-process.checked-allocations.enforce-checked-pointer-arithmetic-overflow`](doc://com.apple.documentation/documentation/BundleResources/Entitlements/com.apple.security.hardened-process.checked-allocations.enforce-checked-pointer-arithmetic-overflow) — checked pointer arithmetic; needs the `arm64e.x1` slice from `ENABLE_HARDWARE_CHECKED_POINTER_ARITHMETIC_SLICE` and other requisites
 
 ## Additional Settings — Potentially More False Positives
 
@@ -70,7 +90,6 @@ These are managed per-target in each target's `.entitlements` file. See `enhance
 |---|---|---|---|---|
 | `CLANG_WARN_SUSPICIOUS_IMPLICIT_CONVERSION` | `YES` | `-Wconversion` | C/C++/ObjC/ObjC++ | May be noisy in some codebases |
 | `CLANG_ANALYZER_SECURITY_BUFFER_OVERFLOW_EXPERIMENTAL` | `YES` | checker: `security.ArrayBound` | C/C++/ObjC/ObjC++ | Higher false-positive rate |
-| `CLANG_TIDY_BUGPRONE_REDUNDANT_BRANCH_CONDITION` | `YES` | static analyzer check (integrated from clang-tidy): `bugprone-redundant-branch-condition` | C/C++/ObjC/ObjC++ | Code quality — runs during Build and analyze, not regular builds |
 | `CLANG_WARN_ASSIGN_ENUM` | `YES` | `-Wassign-enum` | C/C++/ObjC/ObjC++ | Code quality |
 | `GCC_WARN_SIGN_COMPARE` | `YES` | `-Wsign-compare` | C/C++/ObjC/ObjC++ | Code quality |
 

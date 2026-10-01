@@ -1,6 +1,6 @@
 {
   "name": "ios-macos-27-specialist",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "iOS and macOS 27 development skills for Codex and Claude Code.",
   "author": {
     "name": "super-original",
@@ -13,13 +13,16 @@
     "macos",
     "swiftui",
     "uikit",
-    "xcode"
+    "xcode",
+    "app-intents",
+    "accessibility",
+    "localization"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "iOS+macOS 27 Specialist",
-    "shortDescription": "Xcode, SwiftUI, UIKit, testing, security, and device workflows.",
-    "longDescription": "Cross-platform Codex and Claude Code plugin for Xcode security audits, C bounds safety, SwiftUI, UIKit modernization, device interaction, and test modernization.",
+    "shortDescription": "Apple-platform development, accessibility, localization, and device workflows.",
+    "longDescription": "Cross-platform Codex and Claude Code plugin for SwiftUI and UIKit development, app resizability and iPhone Duo, App Intents, document apps, accessibility audits, String Catalog localization, Xcode security, device interaction, and test modernization.",
     "developerName": "super-original",
     "category": "Developer Tools",
     "capabilities": [
@@ -29,7 +32,7 @@
     ],
     "defaultPrompt": [
       "Audit this Xcode project for security settings.",
-      "Modernize this UIKit app for current iOS.",
+      "Prepare this app for resizing and iPhone Duo.",
       "Review this SwiftUI code for iOS 27."
     ],
     "brandColor": "#1D4ED8",
